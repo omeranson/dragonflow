@@ -50,6 +50,10 @@ if [[ "$ENABLE_AGING_APP" == "True" ]]; then
     DEFAULT_APPS_LIST="aging,$DEFAULT_APPS_LIST"
 fi
 
+if is_service_enabled taas ; then
+    DEFAULT_APPS_LIST="$DEFAULT_APPS_LIST,taas"
+fi
+
 DF_APPS_LIST=${DF_APPS_LIST:-$DEFAULT_APPS_LIST}
 TUNNEL_TYPES=${TUNNEL_TYPE:-$DEFAULT_TUNNEL_TYPES}
 
