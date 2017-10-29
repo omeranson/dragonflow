@@ -10,9 +10,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-#from jsonmodels import fields
-
-#import dragonflow.db.field_types as df_fields
+import dragonflow.db.field_types as df_fields
 import dragonflow.db.model_framework as mf
 from dragonflow.db.models import l2
 from dragonflow.db.models import mixins
@@ -24,4 +22,7 @@ direction_enum = ('IN', 'OUT', 'BOTH')
 @mf.construct_nb_db_model(indexes={'source_port': 'source_port'})
 class TapFlow(mf.ModelBase, mixins.BasicEvents, mixins.Topic):
     table_name = 'tap_flow'
-    # TODO(oanson) Add fields in workshop
+
+    source_port = df_fields.ReferenceField(l2.LogicalPort)
+    direction = df_fields.EnumField(direction_enum)
+    tap_service = df_fields.ReferenceField(l2.LogicalPort)
