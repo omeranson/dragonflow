@@ -17,7 +17,7 @@ from neutron_taas.services.taas import service_drivers
 from oslo_log import helpers
 from oslo_log import log
 
-#from dragonflow.db.models import taas
+from dragonflow.db.models import taas
 from dragonflow.neutron.services import mixins
 
 LOG = log.getLogger(__name__)
@@ -50,7 +50,19 @@ class DfTaasDriver(service_drivers.TaasBaseDriver, mixins.LazyNbApiMixin):
 
     @helpers.log_method_call
     def create_tap_flow_postcommit(self, context):
-        pass  # TODO(oanson) Complete in workshop
+        tap_flow = context.tap_flow
+        tap_service = context._plugin.get_tap_service(
+            context._plugin_context,
+            tap_flow['tap_service_id'])
+        self.nb_api.create(
+            taas.TapFlow(
+                id=tap_flow['id'],
+                topic=tap_flow['project_id'],
+                source_port=tap_flow['source_port'],
+                direction=tap_flow['direction'],
+                tap_service=tap_service['port_id'],
+            ),
+        )
 
     @helpers.log_method_call
     def delete_tap_flow_precommit(self, context):
@@ -58,4 +70,10 @@ class DfTaasDriver(service_drivers.TaasBaseDriver, mixins.LazyNbApiMixin):
 
     @helpers.log_method_call
     def delete_tap_flow_postcommit(self, context):
-        pass  # TODO(oanson) Complete in workshop
+        tap_flow = context.tap_flow
+        self.nb_api.delete(
+            taas.TapFlow(
+                id=tap_flow['id'],
+                topic=tap_flow['project_id'],
+            ),
+        )
