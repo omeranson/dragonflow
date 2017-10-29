@@ -34,9 +34,55 @@ class TapAsAServiceApp(df_base_app.DFlowApp):
     @df_base_app.register_event(taas.TapFlow, constants.EVENT_CREATED)
     @helpers.log_method_call
     def _tap_flow_created(self, tap_flow):
-        pass  # TODO(oanson) Complete in workshop
+        if tap_flow.direction in {'OUT', 'BOTH'}:
+            self._tap_flow_create_out(tap_flow)
+        if tap_flow.direction in {'IN', 'BOTH'}:
+            self._tap_flow_create_in(tap_flow)
+
+    def _tap_flow_create_in(self, tap_flow):
+        pass  # Not supported
+
+    def _tap_flow_create_out(self, tap_flow):
+        parser = self.parser
+        match = self._get_tap_flow_match(tap_flow)
+        actions = (
+            parser.NXActionResubmitTable(
+                table_id=const.EGRESS_PORT_SECURITY_TABLE),
+            parser.OFPActionSetField(
+                reg7=tap_flow.tap_service.unique_key),
+            parser.NXActionResubmitTable(
+                table_id=const.INGRESS_DISPATCH_TABLE),
+        )
+        self.mod_flow(
+            actions=actions,
+            table_id=const.TAP_SERVICE_DUPLICATE_TABLE,
+            priority=const.PRIORITY_MEDIUM,
+            match=match)
 
     @df_base_app.register_event(taas.TapFlow, constants.EVENT_DELETED)
     @helpers.log_method_call
     def _tap_flow_deleted(self, tap_flow):
-        pass  # TODO(oanson) Complete in workshop
+        if tap_flow.direction in {'OUT', 'BOTH'}:
+            self._tap_flow_delete_out(tap_flow)
+        if tap_flow.direction in {'IN', 'BOTH'}:
+            self._tap_flow_delete_in(tap_flow)
+
+    def _tap_flow_delete_in(self, tap_flow):
+        pass  # Not supported
+
+    def _tap_flow_delete_out(self, tap_flow):
+        ofproto = self.ofproto
+        match = self._get_tap_flow_match(tap_flow)
+        self.mod_flow(
+            command=ofproto.OFPFC_DELETE,
+            table_id=const.TAP_SERVICE_DUPLICATE_TABLE,
+            priority=const.PRIORITY_MEDIUM,
+            match=match)
+
+    def _get_tap_flow_match(self, tap_flow):
+        parser = self.parser
+        lport = tap_flow.source_port
+        match = parser.OFPMatch(
+            reg6=lport.unique_key,
+            metadata=lport.lswitch.unique_key)
+        return match
