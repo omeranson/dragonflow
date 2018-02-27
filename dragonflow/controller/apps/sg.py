@@ -400,7 +400,8 @@ class SGApp(df_base_app.DFlowApp):
                 return
 
             for match in matches:
-                match[ip_match_item] = remote_ip_prefix
+                match[ip_match_item] = (remote_ip_prefix.network,
+                                        remote_ip_prefix.netmask)
 
         parser = self.parser
 
@@ -711,6 +712,22 @@ class SGApp(df_base_app.DFlowApp):
 
         return added_secgroups, removed_secgroups, unchanged_secgroups
 
+    def _install_skip_egress_rule(self, lport):
+        self.add_flow_go_to_table(
+            EGRESS_SECURITY_GROUP_TABLE,
+            const.PRIORITY_DEFAULT + 1,
+            INGRESS_SECURITY_GROUP_TABLE,
+            match=self.parser.OFPMatch(reg6=lport.unique_key),
+        )
+
+    def _uninstall_skip_egress_rule(self, lport):
+        self.mod_flow(
+            table_id=EGRESS_SECURITY_GROUP_TABLE,
+            priority=const.PRIORITY_DEFAULT + 1,
+            match=self.parser.OFPMatch(reg6=lport.unique_key),
+            command=self.ofproto.OFPFC_DELETE_STRICT,
+        )
+
     def _install_skip_ingress_rule(self, lport):
         self.add_flow_go_to_table(
             INGRESS_SECURITY_GROUP_TABLE,
@@ -732,6 +749,7 @@ class SGApp(df_base_app.DFlowApp):
     def _remove_local_port(self, lport):
         secgroups = lport.security_groups
         if not secgroups:
+            self._uninstall_skip_egress_rule(lport)
             self._uninstall_skip_ingress_rule(lport)
             return
 
@@ -756,6 +774,7 @@ class SGApp(df_base_app.DFlowApp):
         if not secgroups and original_secgroups:
             # uninstall ct table
             self._uninstall_connection_track_flows(lport)
+            self._install_skip_egress_rule(lport)
             self._install_skip_ingress_rule(lport)
 
         for secgroup in added_secgroups:
@@ -767,6 +786,7 @@ class SGApp(df_base_app.DFlowApp):
         if secgroups and not original_secgroups:
             # install ct table
             self._install_connection_track_flows(lport)
+            self._uninstall_skip_egress_rule(lport)
             self._uninstall_skip_ingress_rule(lport)
 
     @df_base_app.register_event(l2.LogicalPort, l2.EVENT_BIND_REMOTE)
@@ -774,6 +794,7 @@ class SGApp(df_base_app.DFlowApp):
     def _add_local_port(self, lport):
         secgroups = lport.security_groups
         if not secgroups:
+            self._install_skip_egress_rule(lport)
             self._install_skip_ingress_rule(lport)
             return
 
