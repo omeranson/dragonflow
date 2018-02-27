@@ -784,7 +784,8 @@ class SGApp(df_base_app.DFlowApp):
         self._install_connection_track_flows(lport)
 
     def _is_sg_not_associated_with_local_port(self, secgroup):
-        return self.secgroup_associate_local_ports.get(secgroup.id) is None
+        #return self.secgroup_associate_local_ports.get(secgroup.id) is None
+        return False
 
     @df_base_app.register_event(sg_model.SecurityGroup,
                                 model_constants.EVENT_CREATED)
@@ -850,7 +851,7 @@ class SGApp(df_base_app.DFlowApp):
         remote_group_id = secgroup_rule.remote_group_id
         if remote_group_id is not None:
             associate_rules = self.remote_secgroup_ref[remote_group_id]
-            associate_rules.pop(secgroup_rule.id)
+            associate_rules.pop(secgroup_rule.id, None)
 
         self._uninstall_security_group_rule_flows(secgroup_rule)
 
