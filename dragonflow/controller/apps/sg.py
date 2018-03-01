@@ -274,7 +274,7 @@ class SGApp(df_base_app.DFlowApp):
             recirc_table=CONNTRACK_RESULT_TABLE,
             zone_ofs_nbits=const.SG_TRACKING_ZONE,
             zone_src='',
-        ), ]
+        )]
 
         match = {register: lport.unique_key}
         self._install_ipv4_ipv6_rules(
@@ -446,6 +446,127 @@ class SGApp(df_base_app.DFlowApp):
         Prepare the packet for connection tracking. Push IPs to stack, and
         replace with unique keys.
         """
+        # At least reg6 or reg7 should be specified
+        self.mod_flow(
+            table_id=CONNTRACK_PREPARE_TABLE,
+            match=self.parser.OFPMatch(reg6=0, reg7=0),
+            priority=const.PRIORITY_HIGH,
+        )
+
+        # XXX Duplicate code
+
+        # IPv4 - reg6 is 0
+        match = {'eth_type': ether.ETH_TYPE_IP, 'reg6': 0}
+        actions = [
+            self.parser.NXActionStackPush(field='ipv4_src', start=0, end=32),
+            self.parser.NXActionStackPush(field='ipv4_dst', start=0, end=32),
+            self.parser.NXActionRegMove(
+                src_field='reg7',
+                dst_field='ipv4_dst',
+                n_bits=32,
+            ),
+            self.parser.NXActionRegLoad(
+                ofs_nbits=nicira_ext.ofs_nbits(31, 31),
+                dst="ipv4_dst",
+                value=1,
+            ),
+        ]
+        inst = [
+            self.parser.OFPInstructionActions(
+                self.ofproto.OFPIT_APPLY_ACTIONS, actions),
+            self.parser.OFPInstructionGotoTable(CONNTRACK_TABLE),
+        ]
+        self.mod_flow(
+            table_id=CONNTRACK_PREPARE_TABLE,
+            match=self.parser.OFPMatch(**match),
+            inst=inst,
+            priority=const.PRIORITY_MEDIUM + 1,
+        )
+
+        # IPv6 - reg6 is 0
+        match = {'eth_type': ether.ETH_TYPE_IPV6, 'reg6': 0}
+        actions = [
+            self.parser.NXActionStackPush(field='ipv6_src', start=0, end=128),
+            self.parser.NXActionStackPush(field='ipv6_dst', start=0, end=128),
+            self.parser.NXActionRegMove(
+                src_field='reg7',
+                dst_field='ipv6_dst',
+                n_bits=32,
+            ),
+            self.parser.NXActionRegLoad(
+                ofs_nbits=nicira_ext.ofs_nbits(127, 127),
+                dst="ipv6_dst",
+                value=1,
+            ),
+        ]
+        inst = [
+            self.parser.OFPInstructionActions(
+                self.ofproto.OFPIT_APPLY_ACTIONS, actions),
+            self.parser.OFPInstructionGotoTable(CONNTRACK_TABLE),
+        ]
+        self.mod_flow(
+            table_id=CONNTRACK_PREPARE_TABLE,
+            match=self.parser.OFPMatch(**match),
+            inst=inst,
+            priority=const.PRIORITY_MEDIUM + 1,
+        )
+
+        # IPv4 - reg7 is 0
+        match = {'eth_type': ether.ETH_TYPE_IP, 'reg7': 0}
+        actions = [
+            self.parser.NXActionStackPush(field='ipv4_src', start=0, end=32),
+            self.parser.NXActionStackPush(field='ipv4_dst', start=0, end=32),
+            self.parser.NXActionRegMove(
+                src_field='reg6',
+                dst_field='ipv4_src',
+                n_bits=32,
+            ),
+            self.parser.NXActionRegLoad(
+                ofs_nbits=nicira_ext.ofs_nbits(31, 31),
+                dst="ipv4_src",
+                value=1,
+            ),
+        ]
+        inst = [
+            self.parser.OFPInstructionActions(
+                self.ofproto.OFPIT_APPLY_ACTIONS, actions),
+            self.parser.OFPInstructionGotoTable(CONNTRACK_TABLE),
+        ]
+        self.mod_flow(
+            table_id=CONNTRACK_PREPARE_TABLE,
+            match=self.parser.OFPMatch(**match),
+            inst=inst,
+            priority=const.PRIORITY_MEDIUM + 1,
+        )
+
+        # IPv6 - reg7 is 0
+        match = {'eth_type': ether.ETH_TYPE_IPV6, 'reg7': 0}
+        actions = [
+            self.parser.NXActionStackPush(field='ipv6_src', start=0, end=128),
+            self.parser.NXActionStackPush(field='ipv6_dst', start=0, end=128),
+            self.parser.NXActionRegMove(
+                src_field='reg6',
+                dst_field='ipv6_src',
+                n_bits=32,
+            ),
+            self.parser.NXActionRegLoad(
+                ofs_nbits=nicira_ext.ofs_nbits(127, 127),
+                dst="ipv6_src",
+                value=1,
+            ),
+        ]
+        inst = [
+            self.parser.OFPInstructionActions(
+                self.ofproto.OFPIT_APPLY_ACTIONS, actions),
+            self.parser.OFPInstructionGotoTable(CONNTRACK_TABLE),
+        ]
+        self.mod_flow(
+            table_id=CONNTRACK_PREPARE_TABLE,
+            match=self.parser.OFPMatch(**match),
+            inst=inst,
+            priority=const.PRIORITY_MEDIUM + 1,
+        )
+
         # IPv4
         match = {'eth_type': ether.ETH_TYPE_IP}
         actions = [
@@ -480,7 +601,8 @@ class SGApp(df_base_app.DFlowApp):
         self.mod_flow(
             table_id=CONNTRACK_PREPARE_TABLE,
             match=self.parser.OFPMatch(**match),
-            inst=inst
+            inst=inst,
+            priority=const.PRIORITY_MEDIUM,
         )
 
         # IPv6
@@ -517,7 +639,8 @@ class SGApp(df_base_app.DFlowApp):
         self.mod_flow(
             table_id=CONNTRACK_PREPARE_TABLE,
             match=self.parser.OFPMatch(**match),
-            inst=inst
+            inst=inst,
+            priority=const.PRIORITY_MEDIUM,
         )
 
     def _install_conntrack_result(self):
@@ -629,6 +752,11 @@ class SGApp(df_base_app.DFlowApp):
         self.mod_flow(
              table_id=INGRESS_SECURITY_GROUP_TABLE,
              priority=const.PRIORITY_DEFAULT)
+
+        # Skip egress (resp. ingress) if source (resp. destination) port
+        # is not known
+        self._install_skip_egress_rule(l2.LogicalPort(unique_key=0))
+        self._install_skip_ingress_rule(l2.LogicalPort(unique_key=0))
 
     def switch_features_handler(self, ev):
         self._install_env_init_flow()
